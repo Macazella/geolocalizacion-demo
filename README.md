@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Property Intelligence AR — Demo pública
 
-## Getting Started
+Buscador inmobiliario que reúne publicaciones de múltiples fuentes,
+identifica anuncios repetidos y ayuda a comparar opciones sobre un
+mapa con ubicaciones verificadas.
 
-First, run the development server:
+Esta es la **demo pública** del producto — cubre dos zonas del Gran
+Buenos Aires (Lomas de Zamora y Lanús) con un dataset sanitizado y
+generado periódicamente. No requiere cuenta para buscar, guardar
+favoritos o ver historial de precio.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Qué hace
+
+- **Un solo buscador** sobre publicaciones agregadas de varios
+  portales inmobiliarios.
+- **Detección de duplicados**: cuando la misma propiedad aparece en
+  más de una fuente, se muestra como una sola ficha ("Publicado en N
+  fuentes"), nunca como anuncios repetidos sin relacionar.
+- **Mapa con ubicaciones verificadas**: solo se muestra un marker
+  cuando la ubicación tiene evidencia suficiente (dirección exacta o
+  aproximada) — nunca se pone un punto en el mapa a partir del
+  centroide de una localidad como si fuera el domicilio real.
+- **Historial de precio** por propiedad, cuando hay más de una
+  observación registrada.
+- **Favoritos** guardados en el navegador (sin necesidad de cuenta en
+  esta demo).
+
+## Arquitectura (frontend)
+
+- **Next.js 16** (App Router) + **TypeScript** + **Tailwind CSS**.
+- **Leaflet** + clustering para el mapa (tiles de OpenStreetMap, sin
+  API key).
+- Dataset estático (`data/public_demo_dataset.json`), generado
+  offline y sanitizado — esta app **no se conecta a ninguna base de
+  datos ni servicio backend**. Es 100% estática, apta para desplegar
+  en Vercel sin configuración adicional.
+- Favoritos: `localStorage`, sin autenticación.
+
+```
+app/                rutas (landing, /buscar, /propiedad/[id], /favoritos)
+components/         componentes de UI (search, filters, property, map, layout)
+lib/                lógica de datos/filtros/formatters, sin dependencias externas
+types/              contrato de datos público (PublicProperty)
+data/               dataset estático sanitizado + catálogo de zonas
+tests/              tests del contrato de datos, filtros, mapa y ficha
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Cómo correr localmente
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build   # build de producción
+npm test        # suite de tests
+npm run lint    # ESLint
+```
 
-## Learn More
+## Sobre el dataset
 
-To learn more about Next.js, take a look at the following resources:
+El dataset que consume esta demo es un **export sanitizado**,
+generado por un proceso separado (no público) a partir de una fuente
+de datos privada. Contiene únicamente los campos necesarios para
+mostrar cada propiedad — nunca metadatos internos de cómo se
+recolectó, comparó o verificó cada dato. Se actualiza periódicamente,
+no en tiempo real.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Lo que esta demo NO es
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+No es un scraper, no expone ninguna lógica de recolección de datos ni
+de identificación de duplicados — esas capacidades viven en una
+plataforma privada separada. Esta demo es exclusivamente la capa de
+producto orientada al usuario final.
