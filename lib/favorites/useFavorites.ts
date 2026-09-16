@@ -119,5 +119,5 @@ export function useFavorites() {
     [favorites, userId]
   );
 
-  return { favorites, isFavorite, toggleFavorite, hydrated };
+  return { favorites, isFavorite, toggleFavorite, hydrated, isLoggedIn: userId !== null };
 }
