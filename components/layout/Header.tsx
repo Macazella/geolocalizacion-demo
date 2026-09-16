@@ -17,6 +17,9 @@ export function Header() {
           <Link href="/favoritos" className="hover:text-foreground">
             Favoritos
           </Link>
+          <Link href="/login" className="hover:text-foreground">
+            Cuenta
+          </Link>
         </nav>
       </div>
     </header>
