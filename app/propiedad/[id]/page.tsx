@@ -9,19 +9,23 @@ import { MapViewDynamic } from "@/components/map/MapViewDynamic";
 import { getAllPublicIds, getPropertyById } from "@/lib/data/properties";
 import { isMapEligible } from "@/lib/filters/filterProperties";
 
-// Dataset estático y acotado (~257 propiedades) -- se prerenderizan
-// TODAS las fichas en build time (brief P1 §43: no sobre-optimizar,
-// pero tampoco renderizar de más en runtime sin necesidad).
-export function generateStaticParams() {
-  return getAllPublicIds().map((id) => ({ id }));
+// P2: las 257 fichas actuales se siguen prerenderizando en build time,
+// pero con ISR (revalidate) -- un public_id que no existía en el build
+// (propiedad nueva migrada después) igual resuelve on-demand la
+// primera vez gracias a dynamicParams=true (default), sin 404.
+export async function generateStaticParams() {
+  const ids = await getAllPublicIds();
+  return ids.map((id) => ({ id }));
 }
+
+export const revalidate = 3600;
 
 // Nunca acepta un property_id interno en la URL (§27) -- getPropertyById
 // solo indexa por public_id, así que un HIST-000001 en la URL
 // simplemente no matchea nada y cae en notFound().
 export default async function PropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const property = getPropertyById(id);
+  const property = await getPropertyById(id);
 
   if (!property) {
     notFound();

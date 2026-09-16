@@ -5,8 +5,10 @@ import { ValuePropCard } from "@/components/search/ValuePropCard";
 import { QuickZoneLink } from "@/components/search/QuickZoneLink";
 import { getLocations } from "@/lib/data/properties";
 
-export default function Home() {
-  const locations = getLocations();
+export const revalidate = 3600;
+
+export default async function Home() {
+  const locations = await getLocations();
 
   return (
     <div className="flex min-h-screen flex-col">

@@ -3,8 +3,10 @@ import { Footer } from "@/components/layout/Footer";
 import { getAllProperties } from "@/lib/data/properties";
 import { FavoritesList } from "@/components/property/FavoritesList";
 
-export default function FavoritosPage() {
-  const properties = getAllProperties();
+export const revalidate = 3600;
+
+export default async function FavoritosPage() {
+  const properties = await getAllProperties();
 
   return (
     <div className="flex min-h-screen flex-col">

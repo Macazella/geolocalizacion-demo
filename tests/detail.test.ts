@@ -43,24 +43,28 @@ function makeProperty(overrides: Partial<PublicProperty>): PublicProperty {
   };
 }
 
+// P2: getPropertyById/getAllPublicIds ahora consultan Supabase real
+// (ver lib/data/properties.ts) -- estos 4 tests pasan a ser de
+// integración (requieren SUPABASE_URL/SUPABASE_ANON_KEY en el entorno
+// de test) en vez de leer el JSON estático local.
 describe("getPropertyById -- resolución SOLO por public_id (§27)", () => {
-  it("resuelve una propiedad real por su public_id", () => {
-    const ids = getAllPublicIds();
+  it("resuelve una propiedad real por su public_id", async () => {
+    const ids = await getAllPublicIds();
     expect(ids.length).toBeGreaterThan(0);
-    const found = getPropertyById(ids[0]);
+    const found = await getPropertyById(ids[0]);
     expect(found?.public_id).toBe(ids[0]);
   });
 
-  it("un property_id interno (HIST-*) nunca resuelve nada", () => {
-    expect(getPropertyById("HIST-000001")).toBeUndefined();
+  it("un property_id interno (HIST-*) nunca resuelve nada", async () => {
+    expect(await getPropertyById("HIST-000001")).toBeUndefined();
   });
 
-  it("un property_id interno (PROP-DISC-*) nunca resuelve nada", () => {
-    expect(getPropertyById("PROP-DISC-000001")).toBeUndefined();
+  it("un property_id interno (PROP-DISC-*) nunca resuelve nada", async () => {
+    expect(await getPropertyById("PROP-DISC-000001")).toBeUndefined();
   });
 
-  it("un id inventado no resuelve nada (nunca genera datos)", () => {
-    expect(getPropertyById("prop_noexiste12")).toBeUndefined();
+  it("un id inventado no resuelve nada (nunca genera datos)", async () => {
+    expect(await getPropertyById("prop_noexiste12")).toBeUndefined();
   });
 });
 

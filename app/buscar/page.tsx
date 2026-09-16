@@ -3,9 +3,10 @@ import { Header } from "@/components/layout/Header";
 import { ResultsView } from "@/components/search/ResultsView";
 import { getAllProperties, getLocations } from "@/lib/data/properties";
 
-export default function BuscarPage() {
-  const properties = getAllProperties();
-  const locations = getLocations();
+export const revalidate = 3600; // ISR -- refleja cambios de la DB sin redeploy (P2: ahora hay datos vivos)
+
+export default async function BuscarPage() {
+  const [properties, locations] = await Promise.all([getAllProperties(), getLocations()]);
 
   return (
     <div className="flex min-h-screen flex-col">
