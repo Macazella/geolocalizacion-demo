@@ -64,7 +64,7 @@ export default async function AdminMonitoringPage() {
       .order("source_id"),
     supabase
       .from("monitor_events")
-      .select("event_id, source_id, url, detail, observed_at")
+      .select("event_id, property_id, source_id, url, detail, observed_at")
       .eq("event_type", "NEW_PROPERTY_CANDIDATE")
       .is("reviewed_at", null)
       .order("observed_at", { ascending: false }),
