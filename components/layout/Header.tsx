@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AdminLink } from "@/components/layout/AdminLink";
 
 export function Header() {
   return (
@@ -20,6 +21,7 @@ export function Header() {
           <Link href="/login" className="hover:text-foreground">
             Cuenta
           </Link>
+          <AdminLink />
         </nav>
       </div>
     </header>
