@@ -4,6 +4,7 @@ import { Footer } from "@/components/layout/Footer";
 import { SummaryTile } from "@/components/admin/SummaryTile";
 import { MonitoringMetricsTable } from "@/components/admin/MonitoringMetricsTable";
 import { SourceHealthTable } from "@/components/admin/SourceHealthTable";
+import { PendingCandidatesTable } from "@/components/admin/PendingCandidatesTable";
 import { CoverageDisclaimer } from "@/components/admin/CoverageDisclaimer";
 import { createClient } from "@/lib/supabase/server";
 
@@ -55,11 +56,19 @@ export default async function AdminMonitoringPage() {
     );
   }
 
-  const { data: sourceHealth } = await supabase
-    .from("source_health_snapshots")
-    .select("source_id, health_status, search_coverage, coverage_pages, raw_count")
-    .eq("run_id", latestRun.run_id)
-    .order("source_id");
+  const [{ data: sourceHealth }, { data: pendingCandidates }] = await Promise.all([
+    supabase
+      .from("source_health_snapshots")
+      .select("source_id, health_status, search_coverage, coverage_pages, raw_count")
+      .eq("run_id", latestRun.run_id)
+      .order("source_id"),
+    supabase
+      .from("monitor_events")
+      .select("event_id, source_id, url, detail, observed_at")
+      .eq("event_type", "NEW_PROPERTY_CANDIDATE")
+      .is("reviewed_at", null)
+      .order("observed_at", { ascending: false }),
+  ]);
 
   const blockedSources = (sourceHealth ?? [])
     .filter((r) => r.health_status === "BLOCKED" || r.health_status === "FAILED")
@@ -81,6 +90,19 @@ export default async function AdminMonitoringPage() {
         <h2 className="font-semibold text-foreground">Salud de fuentes</h2>
         <div className="mt-3">
           <SourceHealthTable rows={sourceHealth ?? []} />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="font-semibold text-foreground">
+          Candidatos nuevos pendientes de revisión ({pendingCandidates?.length ?? 0})
+        </h2>
+        <p className="mt-1 text-sm text-muted">
+          Detectados por el scraper, todavía sin identidad confirmada — marcarlos como
+          revisados no los publica en la demo.
+        </p>
+        <div className="mt-3">
+          <PendingCandidatesTable rows={pendingCandidates ?? []} />
         </div>
       </section>
 
