@@ -56,7 +56,8 @@ export default async function AdminMonitoringPage() {
     );
   }
 
-  const [{ data: sourceHealth }, { data: pendingCandidates }] = await Promise.all([
+  const PENDING_CANDIDATES_PAGE_SIZE = 50;
+  const [{ data: sourceHealth }, { data: pendingCandidates, count: pendingCandidatesTotal }] = await Promise.all([
     supabase
       .from("source_health_snapshots")
       .select("source_id, health_status, search_coverage, coverage_pages, raw_count")
@@ -64,10 +65,15 @@ export default async function AdminMonitoringPage() {
       .order("source_id"),
     supabase
       .from("monitor_events")
-      .select("event_id, property_id, source_id, url, detail, observed_at")
+      .select("event_id, property_id, source_id, url, detail, observed_at", { count: "exact" })
       .eq("event_type", "NEW_PROPERTY_CANDIDATE")
       .is("reviewed_at", null)
-      .order("observed_at", { ascending: false }),
+      // Mas antiguos primero (no mas recientes): con 50 por pagina y un
+      // backlog que puede superar eso, "mas recientes primero" haria que
+      // los mas viejos nunca se muestren -- siempre los empuja una
+      // corrida nueva. Asi el backlog se vacia en orden, sin inanicion.
+      .order("observed_at", { ascending: true })
+      .limit(PENDING_CANDIDATES_PAGE_SIZE),
   ]);
 
   const blockedSources = (sourceHealth ?? [])
@@ -95,11 +101,17 @@ export default async function AdminMonitoringPage() {
 
       <section>
         <h2 className="font-semibold text-foreground">
-          Candidatos nuevos pendientes de revisión ({pendingCandidates?.length ?? 0})
+          Candidatos nuevos pendientes de revisión ({pendingCandidatesTotal ?? 0})
         </h2>
         <p className="mt-1 text-sm text-muted">
           Detectados por el scraper, todavía sin identidad confirmada — marcarlos como
           revisados no los publica en la demo.
+          {(pendingCandidatesTotal ?? 0) > PENDING_CANDIDATES_PAGE_SIZE && (
+            <>
+              {" "}Mostrando los {PENDING_CANDIDATES_PAGE_SIZE} más antiguos primero — promové o
+              rechazá estos para ver los siguientes.
+            </>
+          )}
         </p>
         <div className="mt-3">
           <PendingCandidatesTable rows={pendingCandidates ?? []} />
