@@ -55,6 +55,13 @@ export interface PublicProperty {
 
   first_seen_label: string | null;
   last_updated_label: string | null;
+
+  // 017: distancia peatonal real (no línea recta) a la estación de
+  // tren más cercana -- null si no es map_eligible o si el cálculo de
+  // ruta falló (nunca se sustituye por una estimación en línea recta).
+  nearest_train_station: string | null;
+  nearest_train_station_line: string | null;
+  walk_distance_m: number | null;
 }
 
 export interface Location {

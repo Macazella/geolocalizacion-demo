@@ -48,3 +48,18 @@ export function formatDateEs(isoDate: string): string {
   const [, month, day] = isoDate.split("-");
   return `${day}/${month}`;
 }
+
+// Cuadra ≈ 100m -- aproximación, no una medida exacta (varía según la
+// zona). walkDistanceM viene de una ruta peatonal real (OSRM), nunca
+// de una estimación en línea recta.
+export function formatWalkDistanceToStation(
+  station: string | null,
+  line: string | null,
+  walkDistanceM: number | null
+): string | null {
+  if (!station || walkDistanceM === null) return null;
+  const cuadras = Math.max(1, Math.round(walkDistanceM / 100));
+  const cuadrasLabel = cuadras === 1 ? "1 cuadra" : `${cuadras} cuadras`;
+  const lineLabel = line ? ` (Línea ${line})` : "";
+  return `A ${cuadrasLabel} de la estación ${station}${lineLabel}`;
+}

@@ -36,6 +36,9 @@ function makeProperty(overrides: Partial<PublicProperty> = {}): PublicProperty {
     price_history: [],
     first_seen_label: null,
     last_updated_label: null,
+    nearest_train_station: null,
+    nearest_train_station_line: null,
+    walk_distance_m: null,
     ...overrides,
   };
 }

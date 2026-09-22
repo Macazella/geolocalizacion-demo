@@ -44,6 +44,9 @@ interface DbPublicPropertyRow {
   price_history: { observed_at: string; price: number; currency: string | null }[] | null;
   first_seen_label: string | null; // pese al nombre, en la DB es el timestamp crudo -- se formatea acá (ver toLabels)
   last_updated_label: string | null;
+  nearest_train_station: string | null;
+  nearest_train_station_line: string | null;
+  walk_distance_m: number | null;
 }
 
 const MESES_ES = [
@@ -134,6 +137,9 @@ function mapRow(row: DbPublicPropertyRow): PublicProperty {
       const l = formatLabelEs(row.last_updated_label);
       return l ? `Última actualización: ${l}` : null;
     })(),
+    nearest_train_station: row.nearest_train_station,
+    nearest_train_station_line: row.nearest_train_station_line,
+    walk_distance_m: row.walk_distance_m,
   };
 }
 
@@ -142,7 +148,8 @@ const PROPERTY_COLUMNS =
   "display_address, latitude, longitude, geo_quality, ambientes, dormitorios, banios, " +
   "surface_total, cochera, patio, terraza, jardin, balcon, parrilla, apto_credito, " +
   "expensas, expensas_currency, agency_names, listing_count, source_names, primary_url, " +
-  "price_history, first_seen_label, last_updated_label";
+  "price_history, first_seen_label, last_updated_label, " +
+  "nearest_train_station, nearest_train_station_line, walk_distance_m";
 
 export async function getAllProperties(): Promise<PublicProperty[]> {
   const { data, error } = await supabase

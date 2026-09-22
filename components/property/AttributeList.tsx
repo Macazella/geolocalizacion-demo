@@ -1,5 +1,6 @@
 import type { PublicProperty } from "@/types/property";
 import { AMENITY_FIELDS, AMENITY_LABELS } from "@/types/property";
+import { formatWalkDistanceToStation } from "@/lib/formatters/format";
 
 interface AttributeListProps {
   property: PublicProperty;
@@ -17,6 +18,11 @@ export function AttributeList({ property }: AttributeListProps) {
   ];
 
   const amenities = AMENITY_FIELDS.filter((field) => property[field] === true);
+  const walkToStation = formatWalkDistanceToStation(
+    property.nearest_train_station,
+    property.nearest_train_station_line,
+    property.walk_distance_m
+  );
 
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
@@ -37,6 +43,12 @@ export function AttributeList({ property }: AttributeListProps) {
             </span>
           ))}
         </div>
+      )}
+
+      {walkToStation && (
+        <p className="mt-4 border-t border-border pt-4 text-sm text-muted">
+          🚆 {walkToStation} <span className="text-xs">(caminando, aprox.)</span>
+        </p>
       )}
 
       {property.expensas !== null && (
