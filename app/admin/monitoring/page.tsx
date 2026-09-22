@@ -85,11 +85,17 @@ export default async function AdminMonitoringPage() {
       .limit(PENDING_CANDIDATES_FETCH_CAP),
   ]);
 
+  // Se deduplica por la URL sin query string -- Zonaprop (y otros)
+  // agregan parámetros de tracking (?n_src=Listado&n_pos=23) que
+  // cambian según la posición en el buscador aunque sea el mismo aviso;
+  // comparar la URL completa dejaba pasar esas variantes como si fueran
+  // candidatos distintos. Ver misma lógica en actions.ts::matchingEventIds.
   const seenUrls = new Set<string>();
   const dedupedPendingEvents = (rawPendingEvents ?? []).filter((e) => {
     if (!e.url) return true; // sin URL no hay como deduplicar, se muestra igual
-    if (seenUrls.has(e.url)) return false;
-    seenUrls.add(e.url);
+    const canonicalPrefix = e.url.split("?")[0];
+    if (seenUrls.has(canonicalPrefix)) return false;
+    seenUrls.add(canonicalPrefix);
     return true;
   });
   const pendingCandidatesTotal = dedupedPendingEvents.length;

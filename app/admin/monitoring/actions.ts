@@ -18,12 +18,29 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>) 
 }
 
 // El mismo aviso puede quedar detectado como NEW_PROPERTY_CANDIDATE en
-// varias corridas de monitoring seguidas (misma URL, distinto run_id) --
-// marcar reviewed_at por url en vez de por un solo event_id evita que
-// las copias repetidas del mismo candidato sigan apareciendo en la cola
-// después de decidir sobre él una vez.
-function candidateMatch(url: string | null, eventId: number) {
-  return url ? { column: "url" as const, value: url } : { column: "event_id" as const, value: eventId };
+// varias corridas de monitoring seguidas -- Zonaprop (y otros) agregan
+// parámetros de tracking a la URL (?n_src=Listado&n_pos=23) que cambian
+// según la posición en el buscador aunque sea el mismo aviso, así que
+// comparar la URL exacta no alcanza -- se compara solo la parte antes
+// del "?". Trae los event_id que matchean y los actualiza a todos de
+// una, para que ninguna variante de tracking del mismo aviso quede
+// pendiente después de decidir sobre él una vez.
+async function matchingEventIds(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  url: string | null,
+  fallbackEventId: number
+): Promise<number[]> {
+  if (!url) return [fallbackEventId];
+  const canonicalPrefix = url.split("?")[0];
+
+  const { data } = await supabase
+    .from("monitor_events")
+    .select("event_id, url")
+    .eq("event_type", "NEW_PROPERTY_CANDIDATE")
+    .is("reviewed_at", null);
+
+  const matches = (data ?? []).filter((e) => e.url?.split("?")[0] === canonicalPrefix);
+  return matches.length > 0 ? matches.map((e) => e.event_id) : [fallbackEventId];
 }
 
 // "Promover" NUNCA publica el candidato -- solo lo anota en
@@ -42,11 +59,11 @@ export async function promoteCandidate(
   if (!(await requireAdmin(supabase))) return;
 
   const now = new Date().toISOString();
-  const match = candidateMatch(url, eventId);
+  const eventIds = await matchingEventIds(supabase, url, eventId);
   await supabase
     .from("monitor_events")
     .update({ reviewed_at: now, review_decision: "PROMOTED" })
-    .eq(match.column, match.value);
+    .in("event_id", eventIds);
 
   await supabase.from("review_queue").insert({
     entity_type: "PROPERTY",
@@ -64,11 +81,11 @@ export async function rejectCandidate(eventId: number, url: string | null) {
   const supabase = await createClient();
   if (!(await requireAdmin(supabase))) return;
 
-  const match = candidateMatch(url, eventId);
+  const eventIds = await matchingEventIds(supabase, url, eventId);
   await supabase
     .from("monitor_events")
     .update({ reviewed_at: new Date().toISOString(), review_decision: "REJECTED" })
-    .eq(match.column, match.value);
+    .in("event_id", eventIds);
 
   revalidatePath("/admin/monitoring");
 }
