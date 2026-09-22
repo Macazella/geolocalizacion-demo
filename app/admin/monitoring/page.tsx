@@ -5,6 +5,7 @@ import { SummaryTile } from "@/components/admin/SummaryTile";
 import { MonitoringMetricsTable } from "@/components/admin/MonitoringMetricsTable";
 import { SourceHealthTable } from "@/components/admin/SourceHealthTable";
 import { PendingCandidatesTable } from "@/components/admin/PendingCandidatesTable";
+import { LikelyDeadListingsTable } from "@/components/admin/LikelyDeadListingsTable";
 import { CoverageDisclaimer } from "@/components/admin/CoverageDisclaimer";
 import { createClient } from "@/lib/supabase/server";
 
@@ -66,24 +67,33 @@ export default async function AdminMonitoringPage() {
   // acá; si el backlog real supera este techo, el conteo mostrado es
   // un piso, no el total exacto.
   const PENDING_CANDIDATES_FETCH_CAP = 1000;
-  const [{ data: sourceHealth }, { data: rawPendingEvents }] = await Promise.all([
-    supabase
-      .from("source_health_snapshots")
-      .select("source_id, health_status, search_coverage, coverage_pages, raw_count")
-      .eq("run_id", latestRun.run_id)
-      .order("source_id"),
-    supabase
-      .from("monitor_events")
-      .select("event_id, property_id, source_id, url, detail, observed_at")
-      .eq("event_type", "NEW_PROPERTY_CANDIDATE")
-      .is("reviewed_at", null)
-      // Mas antiguos primero (no mas recientes): con paginado y un
-      // backlog que puede superar el tamaño de página, "mas recientes
-      // primero" haria que los mas viejos nunca se muestren -- siempre
-      // los empuja una corrida nueva. Asi el backlog se vacia en orden.
-      .order("observed_at", { ascending: true })
-      .limit(PENDING_CANDIDATES_FETCH_CAP),
-  ]);
+  const [{ data: sourceHealth }, { data: rawPendingEvents }, { data: likelyDeadListings }] =
+    await Promise.all([
+      supabase
+        .from("source_health_snapshots")
+        .select("source_id, health_status, search_coverage, coverage_pages, raw_count")
+        .eq("run_id", latestRun.run_id)
+        .order("source_id"),
+      supabase
+        .from("monitor_events")
+        .select("event_id, property_id, source_id, url, detail, observed_at")
+        .eq("event_type", "NEW_PROPERTY_CANDIDATE")
+        .is("reviewed_at", null)
+        // Mas antiguos primero (no mas recientes): con paginado y un
+        // backlog que puede superar el tamaño de página, "mas recientes
+        // primero" haria que los mas viejos nunca se muestren -- siempre
+        // los empuja una corrida nueva. Asi el backlog se vacia en orden.
+        .order("observed_at", { ascending: true })
+        .limit(PENDING_CANDIDATES_FETCH_CAP),
+      // Solo LIKELY_DEAD -- inferencia (pagina generica), nunca
+      // CONFIRMED_DEAD (404 real, ya se oculta solo de la demo publica,
+      // no necesita revision). Ver db/check_listing_liveness.py.
+      supabase
+        .from("listings")
+        .select("listing_id, property_id, source_id, url, liveness_detail, liveness_checked_at")
+        .eq("liveness_status", "LIKELY_DEAD")
+        .order("liveness_checked_at", { ascending: false }),
+    ]);
 
   // Se deduplica por la URL sin query string -- Zonaprop (y otros)
   // agregan parámetros de tracking (?n_src=Listado&n_pos=23) que
@@ -141,6 +151,20 @@ export default async function AdminMonitoringPage() {
         </p>
         <div className="mt-3">
           <PendingCandidatesTable rows={pendingCandidates} />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="font-semibold text-foreground">
+          Publicaciones posiblemente caídas ({likelyDeadListings?.length ?? 0})
+        </h2>
+        <p className="mt-1 text-sm text-muted">
+          Detectadas por el chequeo semanal de liveness al visitar la URL real del aviso — no se
+          ocultan solas de la demo (es una inferencia, no un 404 confirmado), abrí el link para
+          confirmar a ojo.
+        </p>
+        <div className="mt-3">
+          <LikelyDeadListingsTable rows={likelyDeadListings ?? []} />
         </div>
       </section>
 
