@@ -57,7 +57,16 @@ export default async function AdminMonitoringPage() {
   }
 
   const PENDING_CANDIDATES_PAGE_SIZE = 50;
-  const [{ data: sourceHealth }, { data: pendingCandidates, count: pendingCandidatesTotal }] = await Promise.all([
+  // Techo generoso para deduplicar en memoria -- el mismo aviso puede
+  // quedar como NEW_PROPERTY_CANDIDATE en varias corridas seguidas
+  // (misma URL, distinto run_id, ej. si golden_dir en
+  // scripts/run_scheduled_monitoring.py queda atras de una promoción
+  // real). Supabase no puede dar un "count distinct(url)" en una sola
+  // query simple, así que se trae una muestra acotada y se deduplica
+  // acá; si el backlog real supera este techo, el conteo mostrado es
+  // un piso, no el total exacto.
+  const PENDING_CANDIDATES_FETCH_CAP = 1000;
+  const [{ data: sourceHealth }, { data: rawPendingEvents }] = await Promise.all([
     supabase
       .from("source_health_snapshots")
       .select("source_id, health_status, search_coverage, coverage_pages, raw_count")
@@ -65,16 +74,26 @@ export default async function AdminMonitoringPage() {
       .order("source_id"),
     supabase
       .from("monitor_events")
-      .select("event_id, property_id, source_id, url, detail, observed_at", { count: "exact" })
+      .select("event_id, property_id, source_id, url, detail, observed_at")
       .eq("event_type", "NEW_PROPERTY_CANDIDATE")
       .is("reviewed_at", null)
-      // Mas antiguos primero (no mas recientes): con 50 por pagina y un
-      // backlog que puede superar eso, "mas recientes primero" haria que
-      // los mas viejos nunca se muestren -- siempre los empuja una
-      // corrida nueva. Asi el backlog se vacia en orden, sin inanicion.
+      // Mas antiguos primero (no mas recientes): con paginado y un
+      // backlog que puede superar el tamaño de página, "mas recientes
+      // primero" haria que los mas viejos nunca se muestren -- siempre
+      // los empuja una corrida nueva. Asi el backlog se vacia en orden.
       .order("observed_at", { ascending: true })
-      .limit(PENDING_CANDIDATES_PAGE_SIZE),
+      .limit(PENDING_CANDIDATES_FETCH_CAP),
   ]);
+
+  const seenUrls = new Set<string>();
+  const dedupedPendingEvents = (rawPendingEvents ?? []).filter((e) => {
+    if (!e.url) return true; // sin URL no hay como deduplicar, se muestra igual
+    if (seenUrls.has(e.url)) return false;
+    seenUrls.add(e.url);
+    return true;
+  });
+  const pendingCandidatesTotal = dedupedPendingEvents.length;
+  const pendingCandidates = dedupedPendingEvents.slice(0, PENDING_CANDIDATES_PAGE_SIZE);
 
   const blockedSources = (sourceHealth ?? [])
     .filter((r) => r.health_status === "BLOCKED" || r.health_status === "FAILED")
@@ -101,12 +120,13 @@ export default async function AdminMonitoringPage() {
 
       <section>
         <h2 className="font-semibold text-foreground">
-          Candidatos nuevos pendientes de revisión ({pendingCandidatesTotal ?? 0})
+          Candidatos nuevos pendientes de revisión ({pendingCandidatesTotal})
         </h2>
         <p className="mt-1 text-sm text-muted">
           Detectados por el scraper, todavía sin identidad confirmada — marcarlos como
-          revisados no los publica en la demo.
-          {(pendingCandidatesTotal ?? 0) > PENDING_CANDIDATES_PAGE_SIZE && (
+          revisados no los publica en la demo. El mismo aviso agrupa todas sus detecciones
+          repetidas en una sola fila.
+          {pendingCandidatesTotal > PENDING_CANDIDATES_PAGE_SIZE && (
             <>
               {" "}Mostrando los {PENDING_CANDIDATES_PAGE_SIZE} más antiguos primero — promové o
               rechazá estos para ver los siguientes.
@@ -114,7 +134,7 @@ export default async function AdminMonitoringPage() {
           )}
         </p>
         <div className="mt-3">
-          <PendingCandidatesTable rows={pendingCandidates ?? []} />
+          <PendingCandidatesTable rows={pendingCandidates} />
         </div>
       </section>
 

@@ -60,7 +60,7 @@ export function PendingCandidatesTable({ rows }: { rows: PendingCandidateRow[] }
                 <td className="px-4 py-2 text-muted">{new Date(r.observed_at).toLocaleString("es-AR")}</td>
                 <td className="px-4 py-2">
                   <div className="flex justify-end gap-2">
-                    <form action={promoteCandidate.bind(null, r.event_id, entityId, r.source_id ?? "desconocida", r.detail)}>
+                    <form action={promoteCandidate.bind(null, r.event_id, entityId, r.source_id ?? "desconocida", r.detail, r.url)}>
                       <button
                         type="submit"
                         className="rounded-md border border-brand px-3 py-1 text-xs font-medium text-brand hover:bg-brand hover:text-white"
@@ -68,7 +68,7 @@ export function PendingCandidatesTable({ rows }: { rows: PendingCandidateRow[] }
                         Promover
                       </button>
                     </form>
-                    <form action={rejectCandidate.bind(null, r.event_id)}>
+                    <form action={rejectCandidate.bind(null, r.event_id, r.url)}>
                       <button
                         type="submit"
                         className="rounded-md border border-border px-3 py-1 text-xs font-medium text-foreground hover:bg-surface"
