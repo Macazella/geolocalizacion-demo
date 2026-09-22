@@ -9,6 +9,7 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import type { PublicProperty } from "@/types/property";
 import { formatHeading, formatPrice, geoQualityBadge } from "@/lib/formatters/format";
 import { propertiesWithMarkerCoordinates } from "@/lib/map/mapProperties";
+import { ROCA_LINE_STATIONS } from "@/lib/map/trainStations";
 
 // Fix del ícono default de Leaflet roto por el bundler de Next.js --
 // patrón estándar de la librería, sin API key ni servicio externo.
@@ -70,6 +71,21 @@ export function MapView({ properties, center, singleMarker = false }: MapViewPro
     });
 
     map.addLayer(clusterGroup);
+
+    // Estaciones de tren -- capa de referencia visual fija (no cluster,
+    // siempre visibles) para comparar cercanía/lejanía a ojo. Nunca se
+    // filtran ni dependen de las propiedades mostradas.
+    ROCA_LINE_STATIONS.forEach((station) => {
+      L.circleMarker([station.latitude, station.longitude], {
+        radius: 6,
+        color: "#ffffff",
+        weight: 2,
+        fillColor: "#0f766e",
+        fillOpacity: 1,
+      })
+        .bindTooltip(`🚆 ${escapeHtml(station.name)} (Línea ${escapeHtml(station.line)})`)
+        .addTo(map);
+    });
 
     // Leaflet calcula el tamaño del mapa en el momento de L.map() -- si
     // el contenedor todavía mide 0x0 (layout de grid/flex que no
