@@ -3,6 +3,8 @@
 import type { AmenityField, Location, SearchFilters } from "@/types/property";
 import { AMENITY_FIELDS, AMENITY_LABELS, TIPOS } from "@/types/property";
 import { tipoLabel } from "@/lib/formatters/format";
+import { GlideSelect } from "@/components/reactbits/GlideSelect";
+import { CheckboxLineList } from "@/components/reactbits/CheckboxLineList";
 
 interface FilterPanelProps {
   locations: Location[];
@@ -32,9 +34,10 @@ export function FilterPanel({ locations, filters, onChange }: FilterPanelProps) 
     onChange({ ...filters, tipos: next });
   }
 
-  function toggleAmenity(field: AmenityField) {
+  function toggleAmenity(field: string) {
     const current = filters.amenities ?? [];
-    const next = current.includes(field) ? current.filter((a) => a !== field) : [...current, field];
+    const value = field as AmenityField;
+    const next = current.includes(value) ? current.filter((a) => a !== value) : [...current, value];
     onChange({ ...filters, amenities: next });
   }
 
@@ -56,52 +59,35 @@ export function FilterPanel({ locations, filters, onChange }: FilterPanelProps) 
 
       <fieldset>
         <legend className="mb-1 text-sm font-medium text-foreground">Provincia</legend>
-        <select
+        <GlideSelect
+          ariaLabel="Provincia"
+          placeholder="Todas"
           value={filters.province ?? ""}
-          onChange={(e) =>
-            onChange({ ...filters, province: e.target.value || undefined, partido: undefined, locality: undefined })
-          }
-          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-        >
-          <option value="">Todas</option>
-          {provinces.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
+          options={[{ value: "", label: "Todas" }, ...provinces.map((p) => ({ value: p, label: p }))]}
+          onChange={(v) => onChange({ ...filters, province: v || undefined, partido: undefined, locality: undefined })}
+        />
       </fieldset>
 
       <fieldset>
         <legend className="mb-1 text-sm font-medium text-foreground">Partido</legend>
-        <select
+        <GlideSelect
+          ariaLabel="Partido"
+          placeholder="Todos"
           value={filters.partido ?? ""}
-          onChange={(e) => onChange({ ...filters, partido: e.target.value || undefined, locality: undefined })}
-          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-        >
-          <option value="">Todos</option>
-          {partidos.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
+          options={[{ value: "", label: "Todos" }, ...partidos.map((p) => ({ value: p, label: p }))]}
+          onChange={(v) => onChange({ ...filters, partido: v || undefined, locality: undefined })}
+        />
       </fieldset>
 
       <fieldset>
         <legend className="mb-1 text-sm font-medium text-foreground">Localidad</legend>
-        <select
+        <GlideSelect
+          ariaLabel="Localidad"
+          placeholder="Todas"
           value={filters.locality ?? ""}
-          onChange={(e) => onChange({ ...filters, locality: e.target.value || undefined })}
-          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-        >
-          <option value="">Todas</option>
-          {localities.map((l) => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-        </select>
+          options={[{ value: "", label: "Todas" }, ...localities.map((l) => ({ value: l, label: l }))]}
+          onChange={(v) => onChange({ ...filters, locality: v || undefined })}
+        />
       </fieldset>
 
       <fieldset>
@@ -128,19 +114,11 @@ export function FilterPanel({ locations, filters, onChange }: FilterPanelProps) 
 
       <fieldset>
         <legend className="mb-1 text-sm font-medium text-foreground">Tipo</legend>
-        <div className="flex flex-wrap gap-2">
-          {TIPOS.map((tipo) => (
-            <label key={tipo} className="flex items-center gap-1.5 text-sm text-foreground">
-              <input
-                type="checkbox"
-                checked={(filters.tipos ?? []).includes(tipo)}
-                onChange={() => toggleTipo(tipo)}
-                className="h-4 w-4 rounded border-border text-brand"
-              />
-              {tipoLabel(tipo)}
-            </label>
-          ))}
-        </div>
+        <CheckboxLineList
+          items={TIPOS.map((tipo) => ({ value: tipo, label: tipoLabel(tipo) }))}
+          checkedValues={filters.tipos ?? []}
+          onToggle={toggleTipo}
+        />
       </fieldset>
 
       <fieldset>
@@ -178,19 +156,11 @@ export function FilterPanel({ locations, filters, onChange }: FilterPanelProps) 
 
       <fieldset>
         <legend className="mb-1 text-sm font-medium text-foreground">Características</legend>
-        <div className="flex flex-col gap-1.5">
-          {AMENITY_FIELDS.map((field) => (
-            <label key={field} className="flex items-center gap-1.5 text-sm text-foreground">
-              <input
-                type="checkbox"
-                checked={(filters.amenities ?? []).includes(field)}
-                onChange={() => toggleAmenity(field)}
-                className="h-4 w-4 rounded border-border text-brand"
-              />
-              {AMENITY_LABELS[field]}
-            </label>
-          ))}
-        </div>
+        <CheckboxLineList
+          items={AMENITY_FIELDS.map((field) => ({ value: field, label: AMENITY_LABELS[field] }))}
+          checkedValues={filters.amenities ?? []}
+          onToggle={toggleAmenity}
+        />
       </fieldset>
     </div>
   );

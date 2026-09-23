@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabase/browserClient";
 
 // Chequea sesión + rol en el navegador -- así el resto del sitio
 // (Header se usa en toda página estática/ISR) no se vuelve dinámico
-// solo por mostrar este link. Mismo patrón que useFavorites.isLoggedIn.
-export function AdminLink() {
+// solo por saber si hay que mostrar el link de Admin. Mismo patrón que
+// useFavorites.isLoggedIn. Extraído de components/layout/AdminLink.tsx
+// para poder armar el item del Dock condicionalmente en Header.
+export function useIsAdmin(): boolean {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
@@ -35,11 +36,5 @@ export function AdminLink() {
     };
   }, []);
 
-  if (!isAdmin) return null;
-
-  return (
-    <Link href="/admin/monitoring" className="hover:text-foreground">
-      Admin
-    </Link>
-  );
+  return isAdmin;
 }

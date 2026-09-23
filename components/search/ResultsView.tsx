@@ -9,6 +9,8 @@ import { ReliableLocationToggle } from "@/components/filters/ReliableLocationTog
 import { PropertyCard } from "@/components/property/PropertyCard";
 import { PropertyCardSkeleton } from "@/components/property/PropertyCardSkeleton";
 import { MapViewDynamic } from "@/components/map/MapViewDynamic";
+import { GlideSelect } from "@/components/reactbits/GlideSelect";
+import { BentoCard } from "@/components/reactbits/BentoCard";
 
 interface ResultsViewProps {
   properties: PublicProperty[];
@@ -118,15 +120,18 @@ export function ResultsView({ properties, locations }: ResultsViewProps) {
             <p className="text-sm text-muted">
               {sorted.length} {sorted.length === 1 ? "propiedad" : "propiedades"}
             </p>
-            <select
-              value={sortDir}
-              onChange={(e) => setSortDir(e.target.value as "asc" | "desc")}
-              className="rounded-lg border border-border bg-surface px-2 py-1 text-sm"
-              aria-label="Ordenar por precio"
-            >
-              <option value="asc">Precio: menor a mayor</option>
-              <option value="desc">Precio: mayor a menor</option>
-            </select>
+            <div className="w-56">
+              <GlideSelect
+                ariaLabel="Ordenar por precio"
+                value={sortDir}
+                size="sm"
+                options={[
+                  { value: "asc", label: "Precio: menor a mayor" },
+                  { value: "desc", label: "Precio: mayor a menor" },
+                ]}
+                onChange={(v) => setSortDir(v as "asc" | "desc")}
+              />
+            </div>
           </div>
 
           <div className="mb-3 sm:hidden">
@@ -147,7 +152,9 @@ export function ResultsView({ properties, locations }: ResultsViewProps) {
           ) : (
             <div className="space-y-3">
               {sorted.map((p) => (
-                <PropertyCard key={p.public_id} property={p} />
+                <BentoCard key={p.public_id} className="rounded-xl">
+                  <PropertyCard property={p} />
+                </BentoCard>
               ))}
             </div>
           )}

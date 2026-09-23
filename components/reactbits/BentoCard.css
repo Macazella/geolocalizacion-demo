@@ -1,0 +1,29 @@
+.bento-card {
+  --glow-x: 50%;
+  --glow-y: 50%;
+  --glow-intensity: 0;
+  --glow-radius: 220px;
+
+  position: relative;
+  overflow: hidden;
+}
+
+.bento-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 2px;
+  background: radial-gradient(
+    var(--glow-radius) circle at var(--glow-x) var(--glow-y),
+    color-mix(in srgb, var(--brand) calc(var(--glow-intensity) * 90%), transparent) 0%,
+    color-mix(in srgb, var(--brand) calc(var(--glow-intensity) * 40%), transparent) 40%,
+    transparent 70%
+  );
+  border-radius: inherit;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
