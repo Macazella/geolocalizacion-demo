@@ -11,8 +11,18 @@ interface FilterPanelProps {
 }
 
 export function FilterPanel({ locations, filters, onChange }: FilterPanelProps) {
-  const partidos = [...new Set(locations.map((l) => l.partido))];
+  // Cruzado por provincia (y partido, para localidad) -- sin esto, se
+  // podia elegir una localidad de otra provincia/partido que la ya
+  // fijada (ej. venir de Provincia=CABA y elegir "Lanus Oeste", que es
+  // de Buenos Aires) y terminar con un combo imposible que siempre da
+  // 0 resultados, con un mensaje que parece de calidad de datos en vez
+  // de "tus filtros se contradicen".
+  const provinces = [...new Set(locations.map((l) => l.province))];
+  const partidos = [...new Set(
+    locations.filter((l) => !filters.province || l.province === filters.province).map((l) => l.partido)
+  )];
   const localities = locations
+    .filter((l) => !filters.province || l.province === filters.province)
     .filter((l) => !filters.partido || l.partido === filters.partido)
     .map((l) => l.locality);
 
@@ -30,6 +40,24 @@ export function FilterPanel({ locations, filters, onChange }: FilterPanelProps) 
 
   return (
     <div className="space-y-5">
+      <fieldset>
+        <legend className="mb-1 text-sm font-medium text-foreground">Provincia</legend>
+        <select
+          value={filters.province ?? ""}
+          onChange={(e) =>
+            onChange({ ...filters, province: e.target.value || undefined, partido: undefined, locality: undefined })
+          }
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+        >
+          <option value="">Todas</option>
+          {provinces.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
+      </fieldset>
+
       <fieldset>
         <legend className="mb-1 text-sm font-medium text-foreground">Partido</legend>
         <select
