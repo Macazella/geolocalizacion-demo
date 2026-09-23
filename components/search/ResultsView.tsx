@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { AmenityField, Location, PublicProperty, SearchFilters } from "@/types/property";
 import { filterProperties, isMapEligible, sortByPrice } from "@/lib/filters/filterProperties";
 import { FilterPanel } from "@/components/filters/FilterPanel";
@@ -27,9 +27,44 @@ function filtersFromSearchParams(params: URLSearchParams): SearchFilters {
   };
 }
 
+// Inversa de filtersFromSearchParams -- se necesitan las dos para que
+// los filtros vivan en la URL (no solo en estado de React): sin esto,
+// entrar a una ficha y volver atras con el boton del navegador
+// restauraba la URL vieja (sin los cambios de filtro hechos despues de
+// cargar la pagina), obligando a re-marcar todo de nuevo.
+function searchParamsFromFilters(filters: SearchFilters): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters.province) params.set("province", filters.province);
+  if (filters.partido) params.set("partido", filters.partido);
+  if (filters.locality) params.set("locality", filters.locality);
+  if (filters.priceMin != null) params.set("priceMin", String(filters.priceMin));
+  if (filters.priceMax != null) params.set("priceMax", String(filters.priceMax));
+  if (filters.tipos?.length) params.set("tipos", filters.tipos.join(","));
+  if (filters.amenities?.length) params.set("amenities", filters.amenities.join(","));
+  return params;
+}
+
 export function ResultsView({ properties, locations }: ResultsViewProps) {
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
   const [filters, setFilters] = useState<SearchFilters>(() => filtersFromSearchParams(searchParams));
+
+  // Refleja cada cambio de filtro en la URL con replace (no push): no
+  // ensucia el historial con una entrada por cada click en el panel,
+  // pero SI actualiza la entrada actual -- por eso "atras" desde una
+  // ficha de propiedad vuelve con los filtros tal como quedaron, no
+  // como estaban al entrar a /buscar.
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    const qs = searchParamsFromFilters(filters).toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
   const [onlyReliable, setOnlyReliable] = useState(true); // ON por default, brief P1 §23
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [mobileView, setMobileView] = useState<"map" | "list">("list");

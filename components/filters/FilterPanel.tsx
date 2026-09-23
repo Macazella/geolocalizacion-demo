@@ -38,8 +38,22 @@ export function FilterPanel({ locations, filters, onChange }: FilterPanelProps) 
     onChange({ ...filters, amenities: next });
   }
 
+  const hasActiveFilters = Object.values(filters).some((v) =>
+    Array.isArray(v) ? v.length > 0 : v != null && v !== ""
+  );
+
   return (
     <div className="space-y-5">
+      {hasActiveFilters && (
+        <button
+          type="button"
+          onClick={() => onChange({})}
+          className="text-sm font-medium text-brand-dark hover:underline"
+        >
+          Borrar filtros
+        </button>
+      )}
+
       <fieldset>
         <legend className="mb-1 text-sm font-medium text-foreground">Provincia</legend>
         <select
