@@ -188,16 +188,16 @@ interface PixelSnowProps {
 }
 
 export function PixelSnow({
-  color = "#0f766e", // --brand: blanco por defecto es invisible sobre --background claro
+  color = "#5eead4", // teal-300, mas claro que --brand: blanco puro es invisible, --brand solido se veia muy oscuro/cargado
   flakeSize = 0.01,
   minFlakeSize = 1.25,
   pixelResolution = 200,
   speed = 0.6, // mas lento que el default (1.25): decorativo de fondo, no debe distraer
   depthFade = 8,
   farPlane = 20,
-  brightness = 1,
+  brightness = 0.5, // mitad del default: puntos mas tenues, no "manchas" solidas
   gamma = 0.4545,
-  density = 0.12, // mucho mas bajo que el default (0.3): sutil, no "nevada" completa
+  density = 0.08, // mas bajo aun que la primera vuelta (0.12): menos cantidad en pantalla
   variant = "round",
   direction = 125,
   className = "",
