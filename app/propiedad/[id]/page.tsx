@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { PropertyHeader } from "@/components/property/PropertyHeader";
+import { PhotoGallery } from "@/components/property/PhotoGallery";
 import { AttributeList } from "@/components/property/AttributeList";
 import { MultiSourceBadge } from "@/components/property/MultiSourceBadge";
 import { PriceHistoryTable } from "@/components/property/PriceHistoryTable";
@@ -39,6 +40,10 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
 
       <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 pb-24 sm:pb-8">
         <PropertyHeader property={property} />
+
+        <div className="mt-4">
+          <PhotoGallery photoUrls={property.photo_urls} />
+        </div>
 
         <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2">
           {mapEligible ? (

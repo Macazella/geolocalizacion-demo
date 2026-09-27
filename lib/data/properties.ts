@@ -41,6 +41,7 @@ interface DbPublicPropertyRow {
   listing_count: number;
   source_names: string | null;
   primary_url: string | null;
+  photo_urls: string[] | null;
   price_history: { observed_at: string; price: number; currency: string | null }[] | null;
   first_seen_label: string | null; // pese al nombre, en la DB es el timestamp crudo -- se formatea acá (ver toLabels)
   last_updated_label: string | null;
@@ -128,6 +129,7 @@ function mapRow(row: DbPublicPropertyRow): PublicProperty {
     listing_count: row.listing_count,
     source_names: splitNames(row.source_names),
     primary_url: row.primary_url ?? "",
+    photo_urls: row.photo_urls ?? [],
     price_history: toPriceHistory(row.price_history),
     first_seen_label: (() => {
       const m = formatMonthYearEs(row.first_seen_label);
@@ -147,7 +149,7 @@ const PROPERTY_COLUMNS =
   "public_id, tipo, familia_tipo, price, currency, province, partido, locality, " +
   "display_address, latitude, longitude, geo_quality, ambientes, dormitorios, banios, " +
   "surface_total, cochera, patio, terraza, jardin, balcon, parrilla, apto_credito, " +
-  "expensas, expensas_currency, agency_names, listing_count, source_names, primary_url, " +
+  "expensas, expensas_currency, agency_names, listing_count, source_names, primary_url, photo_urls, " +
   "price_history, first_seen_label, last_updated_label, " +
   "nearest_train_station, nearest_train_station_line, walk_distance_m";
 

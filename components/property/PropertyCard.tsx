@@ -7,6 +7,20 @@ interface PropertyCardProps {
   property: PublicProperty;
 }
 
+// Icono generico -- placeholder mientras la cobertura de fotos es
+// parcial (hoy solo BuscadorProp las expone, ver
+// docs/product/SCOPE_EXPANSION_PROPOSAL_v1.md). Nunca una imagen
+// externa de stock: mejor un icono propio y honesto que "no hay foto".
+function PhotoPlaceholderIcon() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <circle cx="8.5" cy="10" r="1.5" />
+      <path d="M3 16l5-5 4 4 3-3 6 6" />
+    </svg>
+  );
+}
+
 // Solo se muestran atributos NO-null (brief P1 §26) -- nunca "Cochera:
 // No" cuando el dato es null.
 export function PropertyCard({ property }: PropertyCardProps) {
@@ -19,29 +33,44 @@ export function PropertyCard({ property }: PropertyCardProps) {
   if (property.terraza === true) attributes.push("terraza");
   if (property.apto_credito === true) attributes.push("apto crédito");
 
+  const thumbnail = property.photo_urls[0];
+
   return (
     <Link
       href={`/propiedad/${property.public_id}`}
       className="block rounded-xl border border-border bg-surface p-4 shadow-sm transition hover:border-brand hover:shadow-md"
     >
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h3 className="font-semibold text-foreground">{formatHeading(property.tipo, property.locality)}</h3>
-          <p className="mt-0.5 text-lg font-bold text-brand-dark">{formatPrice(property.price, property.currency)}</p>
+      <div className="flex gap-3">
+        <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-background">
+          {thumbnail ? (
+            // eslint-disable-next-line @next/next/no-img-element -- fuentes externas con dominios variables, ver PropertyCard/detalle
+            <img src={thumbnail} alt="" loading="lazy" className="h-full w-full object-cover" />
+          ) : (
+            <PhotoPlaceholderIcon />
+          )}
         </div>
-        <FavoriteButton publicId={property.public_id} />
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="font-semibold text-foreground">{formatHeading(property.tipo, property.locality)}</h3>
+              <p className="mt-0.5 text-lg font-bold text-brand-dark">{formatPrice(property.price, property.currency)}</p>
+            </div>
+            <FavoriteButton publicId={property.public_id} />
+          </div>
+
+          <p className="mt-1 text-sm text-muted">{property.display_address}</p>
+          <p className="mt-0.5 text-xs text-muted">{geoQualityBadge(property.geo_quality)}</p>
+
+          {attributes.length > 0 && <p className="mt-2 text-sm text-foreground">{attributes.join(" · ")}</p>}
+
+          {property.listing_count > 1 && (
+            <p className="mt-2 inline-block rounded-full bg-brand-light px-2 py-0.5 text-xs font-medium text-brand-dark">
+              Publicado en {property.listing_count} fuentes
+            </p>
+          )}
+        </div>
       </div>
-
-      <p className="mt-1 text-sm text-muted">{property.display_address}</p>
-      <p className="mt-0.5 text-xs text-muted">{geoQualityBadge(property.geo_quality)}</p>
-
-      {attributes.length > 0 && <p className="mt-2 text-sm text-foreground">{attributes.join(" · ")}</p>}
-
-      {property.listing_count > 1 && (
-        <p className="mt-2 inline-block rounded-full bg-brand-light px-2 py-0.5 text-xs font-medium text-brand-dark">
-          Publicado en {property.listing_count} fuentes
-        </p>
-      )}
     </Link>
   );
 }

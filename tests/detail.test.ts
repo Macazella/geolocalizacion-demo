@@ -36,6 +36,7 @@ function makeProperty(overrides: Partial<PublicProperty>): PublicProperty {
     listing_count: 1,
     source_names: ["Zonaprop"],
     primary_url: "https://example.com",
+    photo_urls: [],
     price_history: [],
     first_seen_label: null,
     last_updated_label: null,

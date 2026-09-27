@@ -50,6 +50,7 @@ export interface PublicProperty {
   listing_count: number;
   source_names: string[];
   primary_url: string;
+  photo_urls: string[];
 
   price_history: PublicPriceObservation[];
 
