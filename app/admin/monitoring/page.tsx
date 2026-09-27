@@ -58,17 +58,22 @@ export default async function AdminMonitoringPage() {
   }
 
   const PENDING_CANDIDATES_PAGE_SIZE = 50;
-  // Techo generoso para deduplicar en memoria -- el mismo aviso puede
-  // quedar como NEW_PROPERTY_CANDIDATE en varias corridas seguidas
-  // (misma URL, distinto run_id, ej. si golden_dir en
-  // scripts/run_scheduled_monitoring.py queda atras de una promoción
-  // real). Supabase no puede dar un "count distinct(url)" en una sola
-  // query simple, así que se trae una muestra acotada y se deduplica
-  // acá; si el backlog real supera este techo, el conteo mostrado es
-  // un piso, no el total exacto.
+  // Techo solo para la TABLA (mostrar los 50 mas viejos primero, ver
+  // mas abajo) -- el TOTAL ya no se calcula sobre esta muestra (bug
+  // real encontrado 2026-09-27: con el backlog crudo por encima de
+  // este techo, los candidatos mas nuevos quedaban siempre afuera de
+  // la muestra ordenada por mas-viejo-primero, asi que el numero
+  // mostrado se congelaba y nunca reflejaba corridas nuevas). El total
+  // ahora sale de pending_candidates_count() (db/schema/029), un
+  // conteo real hecho en Postgres, deduplicado por URL sin query
+  // string, sin traer filas a la aplicacion.
   const PENDING_CANDIDATES_FETCH_CAP = 1000;
-  const [{ data: sourceHealth }, { data: rawPendingEvents }, { data: likelyDeadListings }] =
-    await Promise.all([
+  const [
+    { data: sourceHealth },
+    { data: rawPendingEvents },
+    { data: likelyDeadListings },
+    { data: pendingCandidatesTotalRaw },
+  ] = await Promise.all([
       supabase
         .from("source_health_snapshots")
         .select("source_id, health_status, search_coverage, coverage_pages, raw_count")
@@ -79,10 +84,9 @@ export default async function AdminMonitoringPage() {
         .select("event_id, property_id, source_id, url, detail, observed_at")
         .eq("event_type", "NEW_PROPERTY_CANDIDATE")
         .is("reviewed_at", null)
-        // Mas antiguos primero (no mas recientes): con paginado y un
-        // backlog que puede superar el tamaño de página, "mas recientes
-        // primero" haria que los mas viejos nunca se muestren -- siempre
-        // los empuja una corrida nueva. Asi el backlog se vacia en orden.
+        // Mas antiguos primero (no mas recientes): la tabla de abajo
+        // vacia el backlog en orden, mismo criterio de siempre -- solo
+        // afecta que se ve en la tabla, ya no el total mostrado arriba.
         .order("observed_at", { ascending: true })
         .limit(PENDING_CANDIDATES_FETCH_CAP),
       // Solo LIKELY_DEAD -- inferencia (pagina generica), nunca
@@ -93,6 +97,7 @@ export default async function AdminMonitoringPage() {
         .select("listing_id, property_id, source_id, url, liveness_detail, liveness_checked_at")
         .eq("liveness_status", "LIKELY_DEAD")
         .order("liveness_checked_at", { ascending: false }),
+      supabase.rpc("pending_candidates_count"),
     ]);
 
   // Se deduplica por la URL sin query string -- Zonaprop (y otros)
@@ -100,6 +105,8 @@ export default async function AdminMonitoringPage() {
   // cambian según la posición en el buscador aunque sea el mismo aviso;
   // comparar la URL completa dejaba pasar esas variantes como si fueran
   // candidatos distintos. Ver misma lógica en actions.ts::matchingEventIds.
+  // (Esto sigue existiendo solo para la TABLA de 50 filas -- el total
+  // ya no depende de esta dedup en memoria, ver pendingCandidatesTotal.)
   const seenUrls = new Set<string>();
   const dedupedPendingEvents = (rawPendingEvents ?? []).filter((e) => {
     if (!e.url) return true; // sin URL no hay como deduplicar, se muestra igual
@@ -108,7 +115,7 @@ export default async function AdminMonitoringPage() {
     seenUrls.add(canonicalPrefix);
     return true;
   });
-  const pendingCandidatesTotal = dedupedPendingEvents.length;
+  const pendingCandidatesTotal = pendingCandidatesTotalRaw ?? dedupedPendingEvents.length;
   const pendingCandidates = dedupedPendingEvents.slice(0, PENDING_CANDIDATES_PAGE_SIZE);
 
   const blockedSources = (sourceHealth ?? [])
