@@ -37,4 +37,6 @@ export const ROCA_LINE_STATIONS: TrainStation[] = [
   { name: "Temperley", line: "Roca", latitude: -34.7761, longitude: -58.3963 },
   { name: "Turdera", line: "Roca", latitude: -34.7951, longitude: -58.4079 },
   { name: "Llavallol", line: "Roca", latitude: -34.7971, longitude: -58.43 },
+  // Adrogue agregada 2026-09-27 -- pedido explicito de Maga.
+  { name: "Adrogué", line: "Roca", latitude: -34.7981, longitude: -58.3942 },
 ];
