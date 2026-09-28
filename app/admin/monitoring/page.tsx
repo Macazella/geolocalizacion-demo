@@ -7,6 +7,7 @@ import { SourceHealthTable } from "@/components/admin/SourceHealthTable";
 import { PendingCandidatesTable } from "@/components/admin/PendingCandidatesTable";
 import { LikelyDeadListingsTable } from "@/components/admin/LikelyDeadListingsTable";
 import { CoverageDisclaimer } from "@/components/admin/CoverageDisclaimer";
+import { ProcessPromotedButton } from "@/components/admin/ProcessPromotedButton";
 import { createClient } from "@/lib/supabase/server";
 
 // Página dinámica (depende de la sesión) -- igual que /login, aislada:
@@ -73,6 +74,7 @@ export default async function AdminMonitoringPage() {
     { data: rawPendingEvents },
     { data: likelyDeadListings },
     { data: pendingCandidatesTotalRaw },
+    { count: promotedPendingCount },
   ] = await Promise.all([
       supabase
         .from("source_health_snapshots")
@@ -98,6 +100,15 @@ export default async function AdminMonitoringPage() {
         .eq("liveness_status", "LIKELY_DEAD")
         .order("liveness_checked_at", { ascending: false }),
       supabase.rpc("pending_candidates_count"),
+      // "Promovidos" en este dashboard = fila en review_queue con
+      // review_category NEW_CANDIDATE, status OPEN -- ver
+      // actions.ts::promoteCandidate. El botón dispara el pipeline
+      // (Fases 0-7, repo GEOLOCALIZACCION) sobre exactamente esto.
+      supabase
+        .from("review_queue")
+        .select("*", { count: "exact", head: true })
+        .eq("review_category", "NEW_CANDIDATE")
+        .eq("status", "OPEN"),
     ]);
 
   // Se deduplica por la URL sin query string -- Zonaprop (y otros)
@@ -142,19 +153,28 @@ export default async function AdminMonitoringPage() {
       </section>
 
       <section>
-        <h2 className="font-semibold text-foreground">
-          Candidatos nuevos pendientes de revisión ({pendingCandidatesTotal})
-        </h2>
-        <p className="mt-1 text-sm text-muted">
-          Detectados por el scraper, todavía sin identidad confirmada — marcarlos como
-          revisados no los publica en la demo. El mismo aviso agrupa todas sus detecciones
-          repetidas en una sola fila.
-          {pendingCandidatesTotal > PENDING_CANDIDATES_PAGE_SIZE && (
-            <>
-              {" "}Mostrando los {PENDING_CANDIDATES_PAGE_SIZE} más antiguos primero — promové o
-              rechazá estos para ver los siguientes.
-            </>
-          )}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-semibold text-foreground">
+              Candidatos nuevos pendientes de revisión ({pendingCandidatesTotal})
+            </h2>
+            <p className="mt-1 text-sm text-muted">
+              Detectados por el scraper, todavía sin identidad confirmada — marcarlos como
+              revisados no los publica en la demo. El mismo aviso agrupa todas sus detecciones
+              repetidas en una sola fila.
+              {pendingCandidatesTotal > PENDING_CANDIDATES_PAGE_SIZE && (
+                <>
+                  {" "}Mostrando los {PENDING_CANDIDATES_PAGE_SIZE} más antiguos primero — promové o
+                  rechazá estos para ver los siguientes.
+                </>
+              )}
+            </p>
+          </div>
+          <ProcessPromotedButton disabled={!promotedPendingCount} />
+        </div>
+        <p className="mt-1 text-right text-xs text-muted">
+          {promotedPendingCount ?? 0} promovido{promotedPendingCount === 1 ? "" : "s"} esperando a
+          procesarse en la base.
         </p>
         <div className="mt-3">
           <PendingCandidatesTable rows={pendingCandidates} />

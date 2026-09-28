@@ -89,3 +89,45 @@ export async function rejectCandidate(eventId: number, url: string | null) {
 
   revalidatePath("/admin/monitoring");
 }
+
+// Dispara .github/workflows/promote_candidates.yml (repo privado
+// GEOLOCALIZACCION) por workflow_dispatch -- ese workflow corre el
+// pipeline incremental completo (Fases 0-7) sobre todo lo que este
+// dashboard ya marco como "Promovido" (review_queue). Nunca corre nada
+// acá: Vercel no puede ejecutar el pipeline Python, solo pide a GitHub
+// que lo corra. GH_DISPATCH_TOKEN es un fine-grained PAT (scope
+// "actions: read and write" sobre ese repo) cargado como env var de
+// Vercel -- nunca en el código.
+export async function dispatchCandidatePromotion(): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const supabase = await createClient();
+  if (!(await requireAdmin(supabase))) {
+    return { ok: false, error: "No autorizado." };
+  }
+
+  const token = process.env.GH_DISPATCH_TOKEN;
+  if (!token) {
+    return { ok: false, error: "Falta configurar GH_DISPATCH_TOKEN en Vercel." };
+  }
+
+  const res = await fetch(
+    "https://api.github.com/repos/Macazella/GEOLOCALIZACION-Propiedades-Private/actions/workflows/promote_candidates.yml/dispatches",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ref: "main" }),
+    }
+  );
+
+  if (!res.ok) {
+    const body = await res.text();
+    return { ok: false, error: `GitHub respondió ${res.status}: ${body.slice(0, 300)}` };
+  }
+
+  return { ok: true };
+}
