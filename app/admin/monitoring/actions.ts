@@ -198,3 +198,34 @@ export async function promoteGeoReviewItem(reviewId: number) {
 export async function rejectGeoReviewItem(reviewId: number) {
   await markGeoReview(reviewId, "REJECTED");
 }
+
+// "Publicaciones posiblemente caídas" (LikelyDeadListingsTable) nunca
+// tuvo accion -- era solo informativa, Maga tenia que confirmar a ojo
+// y no habia forma de que quedara resuelto. liveness_status ya
+// distingue LIKELY_DEAD (inferencia, sigue visible en la demo) de
+// CONFIRMED_DEAD (oculto de la vista publica, ver 019_listing_liveness.sql) --
+// estos botones solo mueven manualmente esa MISMA clasificacion que ya
+// usa el chequeo automatico semanal, ninguna logica nueva.
+async function markListingLiveness(listingId: string, status: "CONFIRMED_DEAD" | "ALIVE") {
+  const supabase = await createClient();
+  if (!(await requireAdmin(supabase))) return;
+
+  await supabase
+    .from("listings")
+    .update({
+      liveness_status: status,
+      liveness_checked_at: new Date().toISOString(),
+      liveness_detail: status === "CONFIRMED_DEAD" ? "confirmado_manual_admin" : "revisado_manual_admin_sigue_viva",
+    })
+    .eq("listing_id", listingId);
+
+  revalidatePath("/admin/monitoring");
+}
+
+export async function confirmListingDead(listingId: string) {
+  await markListingLiveness(listingId, "CONFIRMED_DEAD");
+}
+
+export async function confirmListingAlive(listingId: string) {
+  await markListingLiveness(listingId, "ALIVE");
+}

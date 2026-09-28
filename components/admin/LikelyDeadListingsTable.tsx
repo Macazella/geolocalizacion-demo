@@ -1,3 +1,5 @@
+import { confirmListingDead, confirmListingAlive } from "@/app/admin/monitoring/actions";
+
 const SOURCE_DISPLAY_NAMES: Record<string, string> = {
   buscadorprop: "BuscadorProp",
   zonaprop: "Zonaprop",
@@ -35,6 +37,7 @@ export function LikelyDeadListingsTable({ rows }: { rows: LikelyDeadListingRow[]
             <th className="px-4 py-2 font-medium">URL</th>
             <th className="px-4 py-2 font-medium">Motivo</th>
             <th className="px-4 py-2 font-medium">Último chequeo</th>
+            <th className="px-4 py-2 font-medium text-right">Acción</th>
           </tr>
         </thead>
         <tbody>
@@ -55,6 +58,26 @@ export function LikelyDeadListingsTable({ rows }: { rows: LikelyDeadListingRow[]
               <td className="px-4 py-2 text-muted">{r.liveness_detail ?? "—"}</td>
               <td className="px-4 py-2 text-muted">
                 {r.liveness_checked_at ? new Date(r.liveness_checked_at).toLocaleString("es-AR") : "—"}
+              </td>
+              <td className="px-4 py-2">
+                <div className="flex justify-end gap-2">
+                  <form action={confirmListingDead.bind(null, r.listing_id)}>
+                    <button
+                      type="submit"
+                      className="rounded-md border border-border px-3 py-1 text-xs font-medium text-foreground hover:bg-surface"
+                    >
+                      Confirmar caída
+                    </button>
+                  </form>
+                  <form action={confirmListingAlive.bind(null, r.listing_id)}>
+                    <button
+                      type="submit"
+                      className="rounded-md border border-brand px-3 py-1 text-xs font-medium text-brand hover:bg-brand hover:text-white"
+                    >
+                      Sigue viva
+                    </button>
+                  </form>
+                </div>
               </td>
             </tr>
           ))}
