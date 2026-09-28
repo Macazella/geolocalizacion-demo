@@ -9,6 +9,7 @@ import { LikelyDeadListingsTable } from "@/components/admin/LikelyDeadListingsTa
 import { CoverageDisclaimer } from "@/components/admin/CoverageDisclaimer";
 import { ProcessPromotedButton } from "@/components/admin/ProcessPromotedButton";
 import { GeoReviewQueueTable } from "@/components/admin/GeoReviewQueueTable";
+import { ReviewRequiredTable } from "@/components/admin/ReviewRequiredTable";
 import { createClient } from "@/lib/supabase/server";
 
 // Página dinámica (depende de la sesión) -- igual que /login, aislada:
@@ -146,6 +147,45 @@ export default async function AdminMonitoringPage() {
       .eq("status", "OPEN"),
   ]);
 
+  // REVIEW_REQUIRED (monitoring/matching.py::REVIEW_PROPERTY_MATCH):
+  // candidato nuevo cuya identidad podria coincidir con una Property YA
+  // EXISTENTE -- nunca se decide solo. related_property_id (migracion
+  // 033) puede ser null para eventos de ANTES de esa migracion (los 4
+  // que ya estaban pendientes) -- la tabla lo maneja mostrando "sin
+  // sugerencia" en vez de romper. Mismo patron de conteo real
+  // deduplicado que pending_candidates_count() (029), ver 034.
+  const [{ data: rawReviewRequiredEvents }, { data: reviewRequiredTotalRaw }] = await Promise.all([
+    supabase
+      .from("monitor_events")
+      .select("event_id, listing_id, source_id, url, detail, observed_at, related_property_id")
+      .eq("event_type", "REVIEW_REQUIRED")
+      .is("reviewed_at", null)
+      .order("observed_at", { ascending: true })
+      .limit(200),
+    supabase.rpc("review_required_count"),
+  ]);
+  const seenReviewUrls = new Set<string>();
+  const reviewRequiredEvents = (rawReviewRequiredEvents ?? []).filter((e) => {
+    if (!e.url) return true;
+    const canonicalPrefix = e.url.split("?")[0];
+    if (seenReviewUrls.has(canonicalPrefix)) return false;
+    seenReviewUrls.add(canonicalPrefix);
+    return true;
+  });
+  const reviewRequiredTotal = reviewRequiredTotalRaw ?? reviewRequiredEvents.length;
+
+  const relatedPropertyIds = Array.from(
+    new Set(reviewRequiredEvents.map((e) => e.related_property_id).filter((id): id is string => Boolean(id)))
+  );
+  const { data: relatedPropertyRows } =
+    relatedPropertyIds.length > 0
+      ? await supabase
+          .from("properties")
+          .select("property_id, street, number, current_price, currency, tipo_detalle")
+          .in("property_id", relatedPropertyIds)
+      : { data: [] };
+  const relatedProperties = Object.fromEntries((relatedPropertyRows ?? []).map((p) => [p.property_id, p]));
+
   // Se deduplica por la URL sin query string -- Zonaprop (y otros)
   // agregan parámetros de tracking (?n_src=Listado&n_pos=23) que
   // cambian según la posición en el buscador aunque sea el mismo aviso;
@@ -213,6 +253,21 @@ export default async function AdminMonitoringPage() {
         </p>
         <div className="mt-3">
           <PendingCandidatesTable rows={pendingCandidates} />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="font-semibold text-foreground">
+          Coincidencias ambiguas con la base ({reviewRequiredTotal})
+        </h2>
+        <p className="mt-1 text-sm text-muted">
+          Candidatos nuevos cuya identidad podría coincidir con una propiedad que ya está en la
+          base — el puntaje no alcanza para vincularlos solo. &quot;Es la misma&quot; descarta el
+          candidato (queda guardado, no se borra); &quot;Es otra propiedad&quot; la trata como
+          candidato nuevo genuino.
+        </p>
+        <div className="mt-3">
+          <ReviewRequiredTable rows={reviewRequiredEvents} relatedProperties={relatedProperties} />
         </div>
       </section>
 

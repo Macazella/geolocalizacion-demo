@@ -28,7 +28,8 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>) 
 async function matchingEventIds(
   supabase: Awaited<ReturnType<typeof createClient>>,
   url: string | null,
-  fallbackEventId: number
+  fallbackEventId: number,
+  eventType: string = "NEW_PROPERTY_CANDIDATE"
 ): Promise<number[]> {
   if (!url) return [fallbackEventId];
   const canonicalPrefix = url.split("?")[0];
@@ -36,7 +37,7 @@ async function matchingEventIds(
   const { data } = await supabase
     .from("monitor_events")
     .select("event_id, url")
-    .eq("event_type", "NEW_PROPERTY_CANDIDATE")
+    .eq("event_type", eventType)
     .is("reviewed_at", null);
 
   const matches = (data ?? []).filter((e) => e.url?.split("?")[0] === canonicalPrefix);
@@ -228,4 +229,55 @@ export async function confirmListingDead(listingId: string) {
 
 export async function confirmListingAlive(listingId: string) {
   await markListingLiveness(listingId, "ALIVE");
+}
+
+// REVIEW_REQUIRED (monitoring/matching.py::REVIEW_PROPERTY_MATCH):
+// candidato nuevo cuya identidad podria coincidir con una Property YA
+// EXISTENTE (related_property_id, migracion 033) -- nunca se fuerza el
+// vinculo solo, un humano tiene que mirar los dos lados y decidir. A
+// diferencia de un NEW_PROPERTY_CANDIDATE comun, acá "Rechazar" no
+// significa "descartar el aviso" sino "es la misma propiedad, no hace
+// falta agregarla de nuevo" -- y "Promover" significa "no, es otra
+// propiedad distinta", mismo circuito que promoteCandidate (Fases 0-7
+// vuelven a correr el matcher real antes de escribir nada en Golden).
+export async function promoteReviewRequired(
+  eventId: number,
+  entityId: string,
+  source: string,
+  detail: string | null,
+  url: string | null
+) {
+  const supabase = await createClient();
+  if (!(await requireAdmin(supabase))) return;
+
+  const now = new Date().toISOString();
+  const eventIds = await matchingEventIds(supabase, url, eventId, "REVIEW_REQUIRED");
+  await supabase
+    .from("monitor_events")
+    .update({ reviewed_at: now, review_decision: "PROMOTED" })
+    .in("event_id", eventIds);
+
+  await supabase.from("review_queue").insert({
+    entity_type: "PROPERTY",
+    entity_id: entityId,
+    priority: "P2",
+    review_category: "NEW_CANDIDATE",
+    reason: `Candidato de ${source}${detail ? ` (${detail})` : ""} -- confirmado a mano como propiedad distinta pese a la coincidencia posible, pendiente de certificación Fase F.`,
+    status: "OPEN",
+  });
+
+  revalidatePath("/admin/monitoring");
+}
+
+export async function rejectReviewRequired(eventId: number, url: string | null) {
+  const supabase = await createClient();
+  if (!(await requireAdmin(supabase))) return;
+
+  const eventIds = await matchingEventIds(supabase, url, eventId, "REVIEW_REQUIRED");
+  await supabase
+    .from("monitor_events")
+    .update({ reviewed_at: new Date().toISOString(), review_decision: "REJECTED" })
+    .in("event_id", eventIds);
+
+  revalidatePath("/admin/monitoring");
 }
