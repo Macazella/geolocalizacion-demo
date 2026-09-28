@@ -131,3 +131,70 @@ export async function dispatchCandidatePromotion(): Promise<
 
   return { ok: true };
 }
+
+// geo_review_queue (db/schema/032) -- triage de datos geograficos
+// incompletos (sin coordenadas y/o sin precio), separado a proposito
+// de la cola de identidad (review_queue): acá nunca se decide "es la
+// misma propiedad", solo "se puede publicar con los datos que
+// tenemos". PROPERTY = ya está en `properties` pero quedó oculta
+// (public_eligible=false) por el hueco; CANDIDATE = todavía es un
+// aviso pendiente en monitor_events que va a tener el mismo problema
+// si se promueve tal cual.
+async function markGeoReview(reviewId: number, status: "PROMOTED" | "REJECTED") {
+  const supabase = await createClient();
+  if (!(await requireAdmin(supabase))) return;
+
+  const { data: item } = await supabase
+    .from("geo_review_queue")
+    .select("entity_type, entity_id, url")
+    .eq("review_id", reviewId)
+    .maybeSingle();
+  if (!item) return;
+
+  const now = new Date().toISOString();
+
+  if (item.entity_type === "PROPERTY") {
+    // "Promover" acá es una anulación admin explícita de la regla
+    // automática de calidad (Public Data Contract) -- se publica igual
+    // pese al hueco, a criterio humano caso por caso. "Rechazar" solo
+    // confirma que quede afuera (ya lo estaba) mismo criterio.
+    await supabase
+      .from("properties")
+      .update({ public_eligible: status === "PROMOTED" })
+      .eq("property_id", item.entity_id);
+  } else {
+    const eventIds = await matchingEventIds(supabase, item.url, -1);
+    const realIds = eventIds.filter((id) => id !== -1);
+    if (realIds.length > 0) {
+      await supabase
+        .from("monitor_events")
+        .update({ reviewed_at: now, review_decision: status === "PROMOTED" ? "PROMOTED" : "REJECTED" })
+        .in("event_id", realIds);
+    }
+    if (status === "PROMOTED") {
+      await supabase.from("review_queue").insert({
+        entity_type: "PROPERTY",
+        entity_id: item.entity_id,
+        priority: "P2",
+        review_category: "NEW_CANDIDATE",
+        reason: `Promovido desde geo_review_queue pese a datos incompletos -- ${item.url ?? "sin URL"}.`,
+        status: "OPEN",
+      });
+    }
+  }
+
+  await supabase
+    .from("geo_review_queue")
+    .update({ status, decided_at: now })
+    .eq("review_id", reviewId);
+
+  revalidatePath("/admin/monitoring");
+}
+
+export async function promoteGeoReviewItem(reviewId: number) {
+  await markGeoReview(reviewId, "PROMOTED");
+}
+
+export async function rejectGeoReviewItem(reviewId: number) {
+  await markGeoReview(reviewId, "REJECTED");
+}

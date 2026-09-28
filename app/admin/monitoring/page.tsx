@@ -8,6 +8,7 @@ import { PendingCandidatesTable } from "@/components/admin/PendingCandidatesTabl
 import { LikelyDeadListingsTable } from "@/components/admin/LikelyDeadListingsTable";
 import { CoverageDisclaimer } from "@/components/admin/CoverageDisclaimer";
 import { ProcessPromotedButton } from "@/components/admin/ProcessPromotedButton";
+import { GeoReviewQueueTable } from "@/components/admin/GeoReviewQueueTable";
 import { createClient } from "@/lib/supabase/server";
 
 // Página dinámica (depende de la sesión) -- igual que /login, aislada:
@@ -111,6 +112,40 @@ export default async function AdminMonitoringPage() {
         .eq("status", "OPEN"),
     ]);
 
+  // geo_review_queue (db/schema/032) -- triage de datos geograficos
+  // incompletos, separado de la identidad. PROPERTY = ya esta en la
+  // base pero oculta por el hueco (ej. Adrogue sin coordenadas);
+  // CANDIDATE = todavia pendiente, va a tener el mismo problema si se
+  // promueve tal cual.
+  const [{ data: geoReviewProperties }, { data: geoReviewCandidates }] = await Promise.all([
+    supabase
+      .from("geo_review_queue")
+      .select("review_id, entity_id, url, source_id, reason")
+      .eq("entity_type", "PROPERTY")
+      .eq("status", "OPEN")
+      .order("created_at", { ascending: true })
+      .limit(50),
+    supabase
+      .from("geo_review_queue")
+      .select("review_id, entity_id, url, source_id, reason")
+      .eq("entity_type", "CANDIDATE")
+      .eq("status", "OPEN")
+      .order("created_at", { ascending: true })
+      .limit(50),
+  ]);
+  const [{ count: geoReviewPropertiesTotal }, { count: geoReviewCandidatesTotal }] = await Promise.all([
+    supabase
+      .from("geo_review_queue")
+      .select("*", { count: "exact", head: true })
+      .eq("entity_type", "PROPERTY")
+      .eq("status", "OPEN"),
+    supabase
+      .from("geo_review_queue")
+      .select("*", { count: "exact", head: true })
+      .eq("entity_type", "CANDIDATE")
+      .eq("status", "OPEN"),
+  ]);
+
   // Se deduplica por la URL sin query string -- Zonaprop (y otros)
   // agregan parámetros de tracking (?n_src=Listado&n_pos=23) que
   // cambian según la posición en el buscador aunque sea el mismo aviso;
@@ -192,6 +227,34 @@ export default async function AdminMonitoringPage() {
         </p>
         <div className="mt-3">
           <LikelyDeadListingsTable rows={likelyDeadListings ?? []} />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="font-semibold text-foreground">
+          Datos incompletos — ya en la base ({geoReviewPropertiesTotal ?? 0})
+        </h2>
+        <p className="mt-1 text-sm text-muted">
+          Propiedades que ya están en la base pero quedaron ocultas del sitio público porque les
+          falta coordenadas y/o precio (la fuente no trae dirección estructurada). &quot;Promover
+          igual&quot; las publica pese al hueco; &quot;Rechazar&quot; las excluye para siempre
+          (el registro queda guardado, no se borra).
+        </p>
+        <div className="mt-3">
+          <GeoReviewQueueTable rows={geoReviewProperties ?? []} />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="font-semibold text-foreground">
+          Datos incompletos — candidatos pendientes ({geoReviewCandidatesTotal ?? 0})
+        </h2>
+        <p className="mt-1 text-sm text-muted">
+          Avisos todavía sin promover que, con los datos que se pudieron extraer, van a tener el
+          mismo problema (sin coordenadas y/o sin precio) si se promueven tal cual.
+        </p>
+        <div className="mt-3">
+          <GeoReviewQueueTable rows={geoReviewCandidates ?? []} />
         </div>
       </section>
 
