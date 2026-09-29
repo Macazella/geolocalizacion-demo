@@ -10,6 +10,7 @@ import { CoverageDisclaimer } from "@/components/admin/CoverageDisclaimer";
 import { ProcessPromotedButton } from "@/components/admin/ProcessPromotedButton";
 import { GeoReviewQueueTable } from "@/components/admin/GeoReviewQueueTable";
 import { ReviewRequiredTable } from "@/components/admin/ReviewRequiredTable";
+import { ReservedListingsTable } from "@/components/admin/ReservedListingsTable";
 import { createClient } from "@/lib/supabase/server";
 
 // Página dinámica (depende de la sesión) -- igual que /login, aislada:
@@ -204,6 +205,16 @@ export default async function AdminMonitoringPage() {
   const pendingCandidatesTotal = pendingCandidatesTotalRaw ?? dedupedPendingEvents.length;
   const pendingCandidates = dedupedPendingEvents.slice(0, PENDING_CANDIDATES_PAGE_SIZE);
 
+  // Pedido explicito de Maga 2026-09-29: un lugar para revisar a ojo lo
+  // que el chequeo de estado de mercado (cada 12hs, GEOLOCALIZACCION/
+  // db/check_remax_market_status.py) ya saco del mapa publico por estar
+  // "Reservada"/vendida en el sitio de origen -- ver migracion 035.
+  const { data: reservedListings } = await supabase
+    .from("listings")
+    .select("listing_id, property_id, source_id, url, market_status, market_status_checked_at")
+    .in("market_status", ["RESERVED", "SOLD"])
+    .order("market_status_checked_at", { ascending: false });
+
   const blockedSources = (sourceHealth ?? [])
     .filter((r) => r.health_status === "BLOCKED" || r.health_status === "FAILED")
     .map((r) => r.source_id);
@@ -282,6 +293,21 @@ export default async function AdminMonitoringPage() {
         </p>
         <div className="mt-3">
           <LikelyDeadListingsTable rows={likelyDeadListings ?? []} />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="font-semibold text-foreground">
+          Ocultas por reservada/vendida ({reservedListings?.length ?? 0})
+        </h2>
+        <p className="mt-1 text-sm text-muted">
+          El chequeo automático (cada 12hs) ya sacó estas propiedades del mapa público porque el
+          propio sitio las marca reservadas o vendidas — no es un link caído, la página sigue
+          viva. &quot;Sigue activa&quot; corrige un falso positivo si en realidad volvió a estar
+          disponible.
+        </p>
+        <div className="mt-3">
+          <ReservedListingsTable rows={reservedListings ?? []} />
         </div>
       </section>
 

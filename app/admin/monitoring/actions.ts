@@ -231,6 +231,52 @@ export async function confirmListingAlive(listingId: string) {
   await markListingLiveness(listingId, "ALIVE");
 }
 
+// "Ocultas por reservada/vendida" (ReservedListingsTable) -- pedido
+// explicito de Maga 2026-09-29: quiere un lugar donde revisar a ojo las
+// que el chequeo automatico de Remax (GEOLOCALIZACCION/db/
+// check_remax_market_status.py, cada 12hs) ya saco del mapa publico. La
+// UNICA accion que hace falta es la de corregir un falso positivo --
+// "confirmar que sigue reservada" no cambia nada (ya esta oculta, que
+// es lo correcto); "en realidad sigue activa" es la que puede pasar
+// (ej. el vendedor la reactivo) y necesita reflejarse.
+async function markListingMarketStatus(listingId: string, status: "ACTIVE") {
+  const supabase = await createClient();
+  if (!(await requireAdmin(supabase))) return;
+
+  const { data: listing } = await supabase
+    .from("listings")
+    .select("property_id")
+    .eq("listing_id", listingId)
+    .maybeSingle();
+  if (!listing) return;
+
+  await supabase
+    .from("listings")
+    .update({ market_status: status, market_status_checked_at: new Date().toISOString() })
+    .eq("listing_id", listingId);
+
+  // has_active_listing es un rollup a nivel Property (puede tener otro
+  // listing en otra fuente) -- se recalcula mirando TODOS sus listings
+  // vivos, mismo criterio que check_remax_market_status.py.
+  const { data: siblings } = await supabase
+    .from("listings")
+    .select("market_status, liveness_status")
+    .eq("property_id", listing.property_id)
+    .neq("liveness_status", "CONFIRMED_DEAD");
+  const hasActive = (siblings ?? []).some((s) => s.market_status !== "RESERVED" && s.market_status !== "SOLD");
+
+  await supabase
+    .from("properties")
+    .update({ has_active_listing: hasActive })
+    .eq("property_id", listing.property_id);
+
+  revalidatePath("/admin/monitoring");
+}
+
+export async function markListingActiveAgain(listingId: string) {
+  await markListingMarketStatus(listingId, "ACTIVE");
+}
+
 // REVIEW_REQUIRED (monitoring/matching.py::REVIEW_PROPERTY_MATCH):
 // candidato nuevo cuya identidad podria coincidir con una Property YA
 // EXISTENTE (related_property_id, migracion 033) -- nunca se fuerza el
