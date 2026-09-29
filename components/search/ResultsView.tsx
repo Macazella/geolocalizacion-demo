@@ -2,10 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { AmenityField, Location, PublicProperty, SearchFilters } from "@/types/property";
-import { filterProperties, isMapEligible, sortByPrice } from "@/lib/filters/filterProperties";
+import type { Location, PublicProperty, SearchFilters } from "@/types/property";
+import {
+  filterProperties,
+  filtersFromSearchParams,
+  isMapEligible,
+  searchParamsFromFilters,
+  sortByPrice,
+} from "@/lib/filters/filterProperties";
 import { FilterPanel } from "@/components/filters/FilterPanel";
 import { ReliableLocationToggle } from "@/components/filters/ReliableLocationToggle";
+import { SaveSearchButton } from "@/components/search/SaveSearchButton";
 import { PropertyCard } from "@/components/property/PropertyCard";
 import { PropertyCardSkeleton } from "@/components/property/PropertyCardSkeleton";
 import { MapViewDynamic } from "@/components/map/MapViewDynamic";
@@ -15,35 +22,6 @@ import { BentoCard } from "@/components/reactbits/BentoCard";
 interface ResultsViewProps {
   properties: PublicProperty[];
   locations: Location[];
-}
-
-function filtersFromSearchParams(params: URLSearchParams): SearchFilters {
-  return {
-    province: params.get("province") ?? undefined,
-    partido: params.get("partido") ?? undefined,
-    locality: params.get("locality") ?? undefined,
-    priceMin: params.get("priceMin") ? Number(params.get("priceMin")) : undefined,
-    priceMax: params.get("priceMax") ? Number(params.get("priceMax")) : undefined,
-    tipos: params.get("tipos") ? params.get("tipos")!.split(",") : undefined,
-    amenities: params.get("amenities") ? (params.get("amenities")!.split(",") as AmenityField[]) : undefined,
-  };
-}
-
-// Inversa de filtersFromSearchParams -- se necesitan las dos para que
-// los filtros vivan en la URL (no solo en estado de React): sin esto,
-// entrar a una ficha y volver atras con el boton del navegador
-// restauraba la URL vieja (sin los cambios de filtro hechos despues de
-// cargar la pagina), obligando a re-marcar todo de nuevo.
-function searchParamsFromFilters(filters: SearchFilters): URLSearchParams {
-  const params = new URLSearchParams();
-  if (filters.province) params.set("province", filters.province);
-  if (filters.partido) params.set("partido", filters.partido);
-  if (filters.locality) params.set("locality", filters.locality);
-  if (filters.priceMin != null) params.set("priceMin", String(filters.priceMin));
-  if (filters.priceMax != null) params.set("priceMax", String(filters.priceMax));
-  if (filters.tipos?.length) params.set("tipos", filters.tipos.join(","));
-  if (filters.amenities?.length) params.set("amenities", filters.amenities.join(","));
-  return params;
 }
 
 export function ResultsView({ properties, locations }: ResultsViewProps) {
@@ -109,6 +87,9 @@ export function ResultsView({ properties, locations }: ResultsViewProps) {
           <div className="mt-5 border-t border-border pt-4">
             <ReliableLocationToggle checked={onlyReliable} onChange={setOnlyReliable} />
           </div>
+          <div className="mt-4 border-t border-border pt-4">
+            <SaveSearchButton filters={filters} />
+          </div>
         </aside>
 
         <section className={`${mobileView === "list" ? "hidden sm:block" : "block"} min-h-0 p-2 sm:p-4`}>
@@ -138,6 +119,9 @@ export function ResultsView({ properties, locations }: ResultsViewProps) {
             <FilterPanel locations={locations} filters={filters} onChange={setFilters} />
             <div className="mt-4 border-t border-border pt-3">
               <ReliableLocationToggle checked={onlyReliable} onChange={setOnlyReliable} />
+            </div>
+            <div className="mt-3 border-t border-border pt-3">
+              <SaveSearchButton filters={filters} />
             </div>
           </div>
 
