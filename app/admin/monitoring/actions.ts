@@ -44,6 +44,52 @@ async function matchingEventIds(
   return matches.length > 0 ? matches.map((e) => e.event_id) : [fallbackEventId];
 }
 
+// Tabla de descartados (GEOLOCALIZACCION/db/schema/036) -- pedido
+// explicito de Maga 2026-09-29: "prefiero que la base crezca y queden
+// los rechazados para comparar" + notar que los rechazos de
+// MercadoLibre/duplicados quedaban mezclados sin forma facil de verlos
+// aparte. UPSERT por canonical_url (sin query string) -- volver a
+// rechazar el mismo aviso actualiza la fila en vez de duplicarla. Nunca
+// reemplaza la decision real (monitor_events.review_decision /
+// geo_review_queue.status siguen siendo la fuente de verdad), es solo
+// una vista rapida y categorizada de todo lo excluido.
+type DiscardReason =
+  | "SOURCE_PERMANENTLY_BLOCKED"
+  | "DUPLICATE_CONFIRMED"
+  | "DEAD_LINK"
+  | "OUT_OF_SCOPE"
+  | "MARKET_STATUS_INACTIVE"
+  | "REVIEWED_OTHER";
+
+async function upsertDiscardedItem(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  url: string | null,
+  reason: DiscardReason,
+  sourceId: string | null,
+  detail: string | null,
+  relatedPropertyId: string | null = null
+) {
+  if (!url) return;
+  const canonicalUrl = url.split("?")[0];
+  await supabase.from("discarded_items").upsert(
+    {
+      url,
+      canonical_url: canonicalUrl,
+      source_id: sourceId,
+      reason,
+      detail,
+      related_property_id: relatedPropertyId,
+      discarded_at: new Date().toISOString(),
+    },
+    { onConflict: "canonical_url" }
+  );
+}
+
+async function removeDiscardedItem(supabase: Awaited<ReturnType<typeof createClient>>, url: string | null) {
+  if (!url) return;
+  await supabase.from("discarded_items").delete().eq("canonical_url", url.split("?")[0]);
+}
+
 // "Promover" NUNCA publica el candidato -- solo lo anota en
 // review_queue (pendientes) para que se evalue a mano en la próxima
 // certificación del Golden (Fase F, repo GEOLOCALIZACCION). Ese
@@ -87,6 +133,13 @@ export async function rejectCandidate(eventId: number, url: string | null) {
     .from("monitor_events")
     .update({ reviewed_at: new Date().toISOString(), review_decision: "REJECTED" })
     .in("event_id", eventIds);
+
+  // MercadoLibre nunca se puede re-evaluar solo (API bloqueada, ver
+  // memoria del proyecto) -- se distingue del resto de los rechazos
+  // manuales para que se pueda filtrar aparte en la tabla de
+  // descartados.
+  const reason: DiscardReason = (url ?? "").includes("mercadolibre") ? "SOURCE_PERMANENTLY_BLOCKED" : "REVIEWED_OTHER";
+  await upsertDiscardedItem(supabase, url, reason, null, "rechazado_manual_admin");
 
   revalidatePath("/admin/monitoring");
 }
@@ -189,6 +242,13 @@ async function markGeoReview(reviewId: number, status: "PROMOTED" | "REJECTED") 
     .update({ status, decided_at: now })
     .eq("review_id", reviewId);
 
+  if (status === "REJECTED") {
+    await upsertDiscardedItem(
+      supabase, item.url, "REVIEWED_OTHER", null,
+      "geo_review_queue_datos_incompletos", item.entity_type === "PROPERTY" ? item.entity_id : null
+    );
+  }
+
   revalidatePath("/admin/monitoring");
 }
 
@@ -211,6 +271,12 @@ async function markListingLiveness(listingId: string, status: "CONFIRMED_DEAD" |
   const supabase = await createClient();
   if (!(await requireAdmin(supabase))) return;
 
+  const { data: listing } = await supabase
+    .from("listings")
+    .select("url, source_id, property_id")
+    .eq("listing_id", listingId)
+    .maybeSingle();
+
   await supabase
     .from("listings")
     .update({
@@ -219,6 +285,18 @@ async function markListingLiveness(listingId: string, status: "CONFIRMED_DEAD" |
       liveness_detail: status === "CONFIRMED_DEAD" ? "confirmado_manual_admin" : "revisado_manual_admin_sigue_viva",
     })
     .eq("listing_id", listingId);
+
+  if (listing) {
+    if (status === "CONFIRMED_DEAD") {
+      await upsertDiscardedItem(
+        supabase, listing.url, "DEAD_LINK", listing.source_id, "confirmado_manual_admin", listing.property_id
+      );
+    } else {
+      // "Sigue viva" corrige un falso positivo -- nunca debio quedar
+      // marcado como descartado.
+      await removeDiscardedItem(supabase, listing.url);
+    }
+  }
 
   revalidatePath("/admin/monitoring");
 }
@@ -245,7 +323,7 @@ async function markListingMarketStatus(listingId: string, status: "ACTIVE") {
 
   const { data: listing } = await supabase
     .from("listings")
-    .select("property_id")
+    .select("property_id, url")
     .eq("listing_id", listingId)
     .maybeSingle();
   if (!listing) return;
@@ -254,6 +332,10 @@ async function markListingMarketStatus(listingId: string, status: "ACTIVE") {
     .from("listings")
     .update({ market_status: status, market_status_checked_at: new Date().toISOString() })
     .eq("listing_id", listingId);
+
+  // "Sigue activa" corrige un falso positivo -- nunca debio quedar
+  // marcado como descartado.
+  await removeDiscardedItem(supabase, listing.url);
 
   // has_active_listing es un rollup a nivel Property (puede tener otro
   // listing en otra fuente) -- se recalcula mirando TODOS sus listings
@@ -320,10 +402,20 @@ export async function rejectReviewRequired(eventId: number, url: string | null) 
   if (!(await requireAdmin(supabase))) return;
 
   const eventIds = await matchingEventIds(supabase, url, eventId, "REVIEW_REQUIRED");
+  const { data: events } = await supabase
+    .from("monitor_events")
+    .select("related_property_id")
+    .in("event_id", eventIds)
+    .limit(1);
   await supabase
     .from("monitor_events")
     .update({ reviewed_at: new Date().toISOString(), review_decision: "REJECTED" })
     .in("event_id", eventIds);
+
+  await upsertDiscardedItem(
+    supabase, url, "DUPLICATE_CONFIRMED", null, "es_la_misma_propiedad",
+    events?.[0]?.related_property_id ?? null
+  );
 
   revalidatePath("/admin/monitoring");
 }

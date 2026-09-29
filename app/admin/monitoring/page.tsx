@@ -11,6 +11,7 @@ import { ProcessPromotedButton } from "@/components/admin/ProcessPromotedButton"
 import { GeoReviewQueueTable } from "@/components/admin/GeoReviewQueueTable";
 import { ReviewRequiredTable } from "@/components/admin/ReviewRequiredTable";
 import { ReservedListingsTable } from "@/components/admin/ReservedListingsTable";
+import { DiscardedItemsTable } from "@/components/admin/DiscardedItemsTable";
 import { createClient } from "@/lib/supabase/server";
 
 // Página dinámica (depende de la sesión) -- igual que /login, aislada:
@@ -215,6 +216,18 @@ export default async function AdminMonitoringPage() {
     .in("market_status", ["RESERVED", "SOLD"])
     .order("market_status_checked_at", { ascending: false });
 
+  // Tabla de descartados (036) -- pedido explicito de Maga 2026-09-29
+  // para comparar URLs nuevas contra todo lo ya evaluado y excluido.
+  const DISCARDED_ITEMS_PAGE_SIZE = 100;
+  const [{ data: discardedItems }, { count: discardedItemsTotal }] = await Promise.all([
+    supabase
+      .from("discarded_items")
+      .select("discarded_id, url, source_id, reason, detail, discarded_at")
+      .order("discarded_at", { ascending: false })
+      .limit(DISCARDED_ITEMS_PAGE_SIZE),
+    supabase.from("discarded_items").select("*", { count: "exact", head: true }),
+  ]);
+
   const blockedSources = (sourceHealth ?? [])
     .filter((r) => r.health_status === "BLOCKED" || r.health_status === "FAILED")
     .map((r) => r.source_id);
@@ -336,6 +349,21 @@ export default async function AdminMonitoringPage() {
         </p>
         <div className="mt-3">
           <GeoReviewQueueTable rows={geoReviewCandidates ?? []} />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="font-semibold text-foreground">
+          Descartados ({discardedItemsTotal ?? 0})
+        </h2>
+        <p className="mt-1 text-sm text-muted">
+          Todo lo ya evaluado y excluido de la base activa, categorizado por motivo — para
+          comparar antes de volver a considerar una URL nueva. El registro real de cada decisión
+          sigue viviendo en su sección de origen (candidatos, caídas, reservadas); esto es solo
+          consulta.
+        </p>
+        <div className="mt-3">
+          <DiscardedItemsTable rows={discardedItems ?? []} total={discardedItemsTotal ?? 0} />
         </div>
       </section>
 
